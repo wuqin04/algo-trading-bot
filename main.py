@@ -2,63 +2,75 @@ import MetaTrader5 as mt
 import pandas as pd
 import datetime
 import keyboard
-import asyncio
+import time
 
-SYMBOL = "EURUSD"
-TF     = mt.TIMEFRAME_M15
-MAGIC  = 1001
-LOT    = 0.01
-SL_PTS = 200
-TL_PTS = 400
-TF_SECS = 15 * 60
+SYMBOL      = "EURUSD"
+TIMEFRAME   = mt.TIMEFRAME_M15
+MAGIC       = 1001
+LOT         = 0.01
+SL_PTS      = 200
+TL_PTS      = 400
+TF_SECS     = 15 * 60
 
-
-async def main():
+def connect():
     if not mt.initialize():
-        print("Failed to connect")
-        return
-
-    info = mt.account_info()
-    print(f"[DEBUG]: Connected! Balance: {info.balance}\n")
-    print("[SERVER]: Press 'q' to exit program.\n\n")
+        print("Failed to connect to your MT5 acc, ensure you downloaded the latest version of MetaTrader5")
+        return False
     
-    stop_event = asyncio.Event()
-    loop = asyncio.get_running_loop()
+    print(f"---------------------------------------")
+    print(f"(✅) Connected to MetaTrader5.")
 
-    def on_quit():
-        print("\n[SYSTEM]: 'q' pressed. Initiating shutdown...\n")
-        loop.call_soon_threadsafe(stop_event.set)
+    selected = mt.symbol_select(SYMBOL, True)
+    if not selected:
+        print(f"Failed to select Symbol: {SYMBOL}.")
+        return False
+    else:
+        print(f"(✅) Selected Symbol: {SYMBOL}")
 
-    keyboard.add_hotkey('q', on_quit)
+    return True
 
-    while not stop_event.is_set():
-        tick = mt.symbol_info_tick("EURUSD")
-        if tick is not None:
-            tick_time = datetime.datetime.fromtimestamp(tick.time)
-            print(f"[CURRENT]: Symbol: EURUSD, Bid: {tick.bid}, Ask: {tick.ask}, {tick_time}")
+def get_data(n=100):
+    rates = mt.copy_rates_from_pos(SYMBOL, TIMEFRAME, 0, n)
 
-        rates = mt.copy_rates_from_pos(
-            "EURUSD",
-            mt.TIMEFRAME_M15,
-            0,
-            100
-        )
+    if rates is not None:
+        df = pd.DataFrame(rates)
+        df["time"] = pd.to_datetime(df["time"], unit="s")
+        print(df.tail())
+        print("\n")
+        
+        return df
 
-        if rates is not None:
-            df = pd.DataFrame(rates)
-            df["time"] = pd.to_datetime(df["time"], unit="s")
-            print(df.tail())
-            print("\n")
+# strategy goes here
+def get_signal():
+    return
 
-        try:
+def place_order():
+    return
 
-            await asyncio.wait_for(stop_event.wait(), timeout=5.0)
-        except asyncio.TimeoutError:
-            pass
+def sell_order():
+    return
 
-    keyboard.remove_hotkey('q')
-    mt.shutdown()
-    print("Program ended successfully.")
+def run():
+    if connect():
+        print(f"(✅) Bot is running.")
+        info = mt.account_info()
+        print(f"Balance: ${info.balance:.2f}\n")
+        time.sleep(3)
+
+        while True:
+            tick = mt.symbol_info_tick(SYMBOL)
+            if tick is not None:
+                tick_time = datetime.datetime.fromtimestamp(tick.time)
+                print(f"Time: {tick_time}, Bid: {tick.bid}, Ask: {tick.ask}")
+
+            df = get_data()
+
+            time.sleep(1.5)
+            if keyboard.is_pressed('q'):
+                break
+
+        print("Shutting down MetaTrader5")
+        mt.shutdown()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run()
